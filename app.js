@@ -1001,37 +1001,8 @@ const ContentRenderer = ({ lesson }) => {
             onSkip();
         };
 
-        const createClipPath = (targetStyle) => {
-            if (!targetStyle || !step.target) return 'none';
-            
-            // Obter dimensões e posição do elemento em destaque
-            const { top, left, width, height } = targetStyle;
-            const elementTop = parseFloat(top);
-            const elementLeft = parseFloat(left);
-            const elementWidth = parseFloat(width);
-            const elementHeight = parseFloat(height);
-            
-            // Calcular as coordenadas do "buraco" no overlay
-            const holeTop = elementTop;
-            const holeLeft = elementLeft;
-            const holeRight = elementLeft + elementWidth;
-            const holeBottom = elementTop + elementHeight;
-            
-            // Criar o clip-path para fazer um "buraco" retangular
-            return `polygon(
-                0% 0%, 
-                0% 100%, 
-                ${holeLeft}px 100%, 
-                ${holeLeft}px ${holeTop}px, 
-                ${holeRight}px ${holeTop}px, 
-                ${holeRight}px ${holeBottom}px, 
-                ${holeLeft}px ${holeBottom}px, 
-                ${holeLeft}px 100%, 
-                100% 100%, 
-                100% 0%
-            )`;
         };
-        
+
         // Função para posicionar o card do tour corretamente
         const getTourCardPosition = () => {
             if (!step.cardStyle) return {};
@@ -1093,56 +1064,19 @@ const ContentRenderer = ({ lesson }) => {
         
         return (
             <div className="fixed inset-0 z-[10000] pointer-events-none">
-                {/* Overlay escuro - sem cobrir o elemento em destaque */}
-                {step.target ? (
-                    <>
-                        {/* Overlay superior */}
-                        <div 
-                            className="absolute left-0 right-0 bg-black/70 backdrop-blur-sm pointer-events-none"
-                            style={{ 
-                                top: 0, 
-                                height: step.targetStyle?.top || 0 
-                            }}
-                        />
-                        {/* Overlay esquerdo */}
-                        <div 
-                            className="absolute bg-black/70 backdrop-blur-sm pointer-events-none"
-                            style={{ 
-                                top: step.targetStyle?.top || 0,
-                                left: 0,
-                                width: step.targetStyle?.left || 0,
-                                height: step.targetStyle?.height || 0
-                            }}
-                        />
-                        {/* Overlay direito */}
-                        <div 
-                            className="absolute bg-black/70 backdrop-blur-sm pointer-events-none"
-                            style={{ 
-                                top: step.targetStyle?.top || 0,
-                                right: 0,
-                                left: `calc(${step.targetStyle?.left || 0} + ${step.targetStyle?.width || 0})`,
-                                height: step.targetStyle?.height || 0
-                            }}
-                        />
-                        {/* Overlay inferior */}
-                        <div 
-                            className="absolute left-0 right-0 bg-black/70 backdrop-blur-sm pointer-events-none"
-                            style={{ 
-                                top: `calc(${step.targetStyle?.top || 0} + ${step.targetStyle?.height || 0})`,
-                                bottom: 0
-                            }}
-                        />
-                        {/* Borda de destaque no elemento */}
-                        <div 
-                            className="absolute border-4 border-indigo-500 rounded-xl pointer-events-none animate-pulse"
-                            style={{
-                                ...step.targetStyle,
-                                boxShadow: '0 0 0 4px rgba(99, 102, 241, 0.2), 0 0 20px rgba(99, 102, 241, 0.4)'
-                            }}
-                        />
-                    </>
-                ) : (
-                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+                {/* Overlay escuro de fundo */}
+                <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+                
+                {/* Borda de destaque no elemento (se houver target) */}
+                {step.target && step.targetStyle && (
+                    <div 
+                        className="absolute border-4 border-indigo-500 rounded-xl pointer-events-none z-[10001] animate-pulse"
+                        style={{
+                            ...step.targetStyle,
+                            boxShadow: '0 0 0 4px rgba(99, 102, 241, 0.2), 0 0 30px rgba(99, 102, 241, 0.6)',
+                            backgroundColor: 'transparent'
+                        }}
+                    />
                 )}
 
                 {/* Card de explicação - com melhor posicionamento e z-index */}
