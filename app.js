@@ -976,12 +976,28 @@ const ContentRenderer = ({ lesson }) => {
     // Product Tour System
     const ProductTour = ({ steps, currentStep, onNext, onPrev, onClose, onSkip, showDontShowAgain = true }) => {
         const [dontShowAgain, setDontShowAgain] = useState(false);
+        const [targetRect, setTargetRect] = useState(null);
         
         if (currentStep < 0 || currentStep >= steps.length) return null;
         
         const step = steps[currentStep];
         const isFirst = currentStep === 0;
         const isLast = currentStep === steps.length - 1;
+
+        // Calcular posição do elemento alvo quando o step mudar
+        useEffect(() => {
+            if (step.target) {
+                const element = document.querySelector(step.target);
+                if (element) {
+                    const rect = element.getBoundingClientRect();
+                    setTargetRect(rect);
+                } else {
+                    setTargetRect(null);
+                }
+            } else {
+                setTargetRect(null);
+            }
+        }, [currentStep, step.target]);
 
         const handleNext = () => {
             if (isLast) {
@@ -1001,23 +1017,18 @@ const ContentRenderer = ({ lesson }) => {
             onSkip();
         };
 
-        const createClipPath = (targetStyle) => {
-            if (!targetStyle || !step.target) return 'none';
+        const createClipPath = () => {
+            if (!targetRect) return 'none';
             
-            // Obter dimensões e posição do elemento em destaque
-            const { top, left, width, height } = targetStyle;
-            const elementTop = parseFloat(top);
-            const elementLeft = parseFloat(left);
-            const elementWidth = parseFloat(width);
-            const elementHeight = parseFloat(height);
-            
-            // Calcular as coordenadas do "buraco" no overlay
-            const holeTop = elementTop;
-            const holeLeft = elementLeft;
-            const holeRight = elementLeft + elementWidth;
-            const holeBottom = elementTop + elementHeight;
+            // Adicionar padding ao redor do elemento destacado
+            const padding = 8;
+            const holeTop = targetRect.top - padding;
+            const holeLeft = targetRect.left - padding;
+            const holeRight = targetRect.right + padding;
+            const holeBottom = targetRect.bottom + padding;
             
             // Criar o clip-path para fazer um "buraco" retangular
+            // Este polígono desenha todo o overlay exceto a área do elemento
             return `polygon(
                 0% 0%, 
                 0% 100%, 
@@ -1034,79 +1045,87 @@ const ContentRenderer = ({ lesson }) => {
         
         // Função para posicionar o card do tour corretamente com smart positioning
         const getTourCardPosition = () => {
-            if (!step.cardStyle) return {};
+            if (!step.cardStyle && !targetRect) return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
             
-            const element = document.querySelector(step.target);
-            if (!element) return step.cardStyle;
-            
-            const rect = element.getBoundingClientRect();
-            const viewport = { w: window.innerWidth, h: window.innerHeight };
-            const padding = 20;
-            const cardWidth = 400;
-            const cardHeight = 280;
-            
-            let pos = { position: 'fixed' };
-            
-            // Calcular melhor posição vertical
-            if (rect.bottom + cardHeight + padding < viewport.h) {
-                // Tem espaço abaixo
-                pos.top = `${rect.bottom + padding}px`;
-            } else if (rect.top - cardHeight - padding > 0) {
-                // Tem espaço acima
-                pos.top = 'auto';
-                pos.bottom = `${viewport.h - rect.top + padding}px`;
-            } else {
-                // Centralizar verticalmente
-                pos.top = '50%';
-                pos.transform = 'translateY(-50%)';
+            // Se há um target com posição calculada, usar smart positioning
+            if (targetRect) {
+                const viewport = { w: window.innerWidth, h: window.innerHeight };
+                const padding = 20;
+                const cardWidth = 400;
+                const cardHeight = 280;
+                
+                let pos = { position: 'fixed' };
+                
+                // Calcular melhor posição vertical
+                if (targetRect.bottom + cardHeight + padding < viewport.h) {
+                    // Tem espaço abaixo
+                    pos.top = `${targetRect.bottom + padding}px`;
+                } else if (targetRect.top - cardHeight - padding > 0) {
+                    // Tem espaço acima
+                    pos.top = 'auto';
+                    pos.bottom = `${viewport.h - targetRect.top + padding}px`;
+                } else {
+                    // Centralizar verticalmente
+                    pos.top = '50%';
+                    pos.transform = 'translateY(-50%)';
+                }
+                
+                // Calcular melhor posição horizontal
+                if (targetRect.right + cardWidth + padding < viewport.w) {
+                    // Tem espaço à direita
+                    pos.left = `${targetRect.right + padding}px`;
+                    pos.right = 'auto';
+                } else if (targetRect.left - cardWidth - padding > 0) {
+                    // Tem espaço à esquerda
+                    pos.left = 'auto';
+                    pos.right = `${viewport.w - targetRect.left + padding}px`;
+                } else {
+                    // Centralizar horizontalmente
+                    pos.left = '50%';
+                    pos.transform = pos.transform ? `${pos.transform} translateX(-50%)` : 'translateX(-50%)';
+                }
+                
+                // Ajustar para telas menores
+                if (viewport.w < 1024) {
+                    pos.maxWidth = 'calc(100vw - 2rem)';
+                    pos.left = '1rem';
+                    pos.right = '1rem';
+                } else {
+                    pos.maxWidth = '90vw';
+                }
+                
+                pos.zIndex = 10002;
+                
+                return pos;
             }
             
-            // Calcular melhor posição horizontal
-            if (rect.right + cardWidth + padding < viewport.w) {
-                // Tem espaço à direita
-                pos.left = `${rect.right + padding}px`;
-                pos.right = 'auto';
-            } else if (rect.left - cardWidth - padding > 0) {
-                // Tem espaço à esquerda
-                pos.left = 'auto';
-                pos.right = `${viewport.w - rect.left + padding}px`;
-            } else {
-                // Centralizar horizontalmente
-                pos.left = '50%';
-                pos.transform = pos.transform ? `${pos.transform} translateX(-50%)` : 'translateX(-50%)';
-            }
-            
-            // Ajustar para telas menores
-            if (viewport.w < 1024) {
-                pos.maxWidth = 'calc(100vw - 2rem)';
-                pos.left = '1rem';
-                pos.right = '1rem';
-            } else {
-                pos.maxWidth = '90vw';
-            }
-            
-            pos.zIndex = 10002;
-            
-            return pos;
+            // Fallback para cardStyle estático
+            return step.cardStyle || {};
         };
         
         return (
             <div className="fixed inset-0 z-[10000] pointer-events-none">
-                {/* Overlay escuro com buraco - agora com clip-path para destacar o elemento em foco */}
+                {/* Overlay escuro com buraco (spotlight) - clip-path para destacar o elemento em foco */}
                 <div 
-                    className="absolute inset-0 bg-black/70 backdrop-blur-sm" 
-                    style={{ clipPath: step.target ? createClipPath(step.targetStyle) : 'none' }}
+                    className="absolute inset-0 bg-black/70 backdrop-blur-sm pointer-events-auto" 
+                    style={{ clipPath: targetRect ? createClipPath() : 'none' }}
+                    onClick={handleSkip}
                 />
                 
-                {/* Spotlight no elemento - agora com z-index mais alto para aparecer acima da sidebar */}
-                {step.target && (
+                {/* Borda de destaque no elemento (spotlight border) */}
+                {targetRect && (
                     <div 
-                        className="absolute border-4 border-indigo-500 rounded-xl shadow-[0_0_0_9999px_rgba(0,0,0,0.7)] pointer-events-none z-[10001]"
-                        style={step.targetStyle}
+                        className="absolute border-4 border-indigo-500 rounded-xl pointer-events-none z-[10001] animate-pulse"
+                        style={{
+                            top: `${targetRect.top - 8}px`,
+                            left: `${targetRect.left - 8}px`,
+                            width: `${targetRect.width + 16}px`,
+                            height: `${targetRect.height + 16}px`,
+                        }}
                     />
                 )}
 
-                {/* Card de explicação - com correções para não ficar atrás da sidebar */}
+                {/* Card de explicação - com smart positioning */}
                 <div 
                     className="absolute bg-white dark:bg-[#15161A] rounded-2xl shadow-2xl border-2 border-indigo-500 p-6 max-w-md pointer-events-auto animate-slide-up z-[10002]"
                     style={getTourCardPosition()}
