@@ -1007,11 +1007,12 @@ const ContentRenderer = ({ lesson }) => {
         const getTourCardPosition = () => {
             if (!step.cardStyle) return {};
             
+            const CARD_MAX_WIDTH = 400; // Largura máxima do card em pixels
+            const CARD_MARGIN = 16; // Margem mínima das bordas
+            const MOBILE_BREAKPOINT = 1024; // Breakpoint para mobile/tablet
+            
             const { top, left, right, bottom, transform } = step.cardStyle;
             const viewportWidth = window.innerWidth;
-            const viewportHeight = window.innerHeight;
-            const cardWidth = 400; // max-width padrão
-            const cardMargin = 16; // margem mínima das bordas
             
             // Estilo base
             const adjustedStyle = {
@@ -1031,14 +1032,14 @@ const ContentRenderer = ({ lesson }) => {
                 const calculatedLeft = (viewportWidth * leftPercent) / 100;
                 
                 // Se o card for sair pela direita, ajustar
-                if (calculatedLeft + cardWidth > viewportWidth - cardMargin) {
+                if (calculatedLeft + CARD_MAX_WIDTH > viewportWidth - CARD_MARGIN) {
                     adjustedStyle.left = 'auto';
-                    adjustedStyle.right = `${cardMargin}px`;
+                    adjustedStyle.right = `${CARD_MARGIN}px`;
                     adjustedStyle.transform = 'none';
                 }
                 // Se o card for sair pela esquerda, ajustar
-                else if (calculatedLeft < cardMargin) {
-                    adjustedStyle.left = `${cardMargin}px`;
+                else if (calculatedLeft < CARD_MARGIN) {
+                    adjustedStyle.left = `${CARD_MARGIN}px`;
                     adjustedStyle.transform = 'none';
                 }
             }
@@ -1046,13 +1047,13 @@ const ContentRenderer = ({ lesson }) => {
             // Se tiver right, garantir margem mínima
             if (right && typeof right === 'string') {
                 const rightValue = parseFloat(right);
-                if (rightValue < cardMargin) {
-                    adjustedStyle.right = `${cardMargin}px`;
+                if (rightValue < CARD_MARGIN) {
+                    adjustedStyle.right = `${CARD_MARGIN}px`;
                 }
             }
             
             // Ajustes para telas menores
-            if (viewportWidth < 1024) { // mobile/tablet
+            if (viewportWidth < MOBILE_BREAKPOINT) {
                 adjustedStyle.maxWidth = 'calc(100vw - 2rem)';
                 adjustedStyle.left = '1rem';
                 adjustedStyle.right = '1rem';
@@ -1153,7 +1154,9 @@ const ContentRenderer = ({ lesson }) => {
             };
             
             document.addEventListener('keydown', handleEscape);
-            return () => document.removeEventListener('keydown', handleEscape);
+            return () => {
+                document.removeEventListener('keydown', handleEscape);
+            };
         }, [isOpen, onClose]);
         
         if (!isOpen) return null;
