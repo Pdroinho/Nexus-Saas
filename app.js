@@ -976,12 +976,28 @@ const ContentRenderer = ({ lesson }) => {
     // Product Tour System
     const ProductTour = ({ steps, currentStep, onNext, onPrev, onClose, onSkip, showDontShowAgain = true }) => {
         const [dontShowAgain, setDontShowAgain] = useState(false);
+        const [targetRect, setTargetRect] = useState(null);
         
         if (currentStep < 0 || currentStep >= steps.length) return null;
         
         const step = steps[currentStep];
         const isFirst = currentStep === 0;
         const isLast = currentStep === steps.length - 1;
+
+        // Calcular posição do elemento alvo quando o step mudar
+        useEffect(() => {
+            if (step.target) {
+                const element = document.querySelector(step.target);
+                if (element) {
+                    const rect = element.getBoundingClientRect();
+                    setTargetRect(rect);
+                } else {
+                    setTargetRect(null);
+                }
+            } else {
+                setTargetRect(null);
+            }
+        }, [currentStep, step.target]);
 
         const handleNext = () => {
             if (isLast) {
@@ -1001,23 +1017,18 @@ const ContentRenderer = ({ lesson }) => {
             onSkip();
         };
 
-        const createClipPath = (targetStyle) => {
-            if (!targetStyle || !step.target) return 'none';
+        const createClipPath = () => {
+            if (!targetRect) return 'none';
             
-            // Obter dimensões e posição do elemento em destaque
-            const { top, left, width, height } = targetStyle;
-            const elementTop = parseFloat(top);
-            const elementLeft = parseFloat(left);
-            const elementWidth = parseFloat(width);
-            const elementHeight = parseFloat(height);
-            
-            // Calcular as coordenadas do "buraco" no overlay
-            const holeTop = elementTop;
-            const holeLeft = elementLeft;
-            const holeRight = elementLeft + elementWidth;
-            const holeBottom = elementTop + elementHeight;
+            // Adicionar padding ao redor do elemento destacado
+            const padding = 8;
+            const holeTop = targetRect.top - padding;
+            const holeLeft = targetRect.left - padding;
+            const holeRight = targetRect.right + padding;
+            const holeBottom = targetRect.bottom + padding;
             
             // Criar o clip-path para fazer um "buraco" retangular
+            // Este polígono desenha todo o overlay exceto a área do elemento
             return `polygon(
                 0% 0%, 
                 0% 100%, 
@@ -1032,54 +1043,89 @@ const ContentRenderer = ({ lesson }) => {
             )`;
         };
         
-        // Função para posicionar o card do tour corretamente
+        // Função para posicionar o card do tour corretamente com smart positioning
         const getTourCardPosition = () => {
-            if (!step.cardStyle) return {};
+            if (!step.cardStyle && !targetRect) return { top: '50%', left: '50%', transform: 'translate(-50%, -50%)' };
             
-            const { top, left, right, bottom, transform } = step.cardStyle;
-            
-            // Ajustar posição para evitar que fique atrás da sidebar
-            const adjustedStyle = {
-                top,
-                left,
-                right,
-                bottom,
-                transform,
-                maxWidth: '400px',
-                zIndex: 10002
-            };
-            
-            // Ajustar para telas menores
-            if (window.innerWidth < 1024) { // mobile
-                adjustedStyle.maxWidth = 'calc(100vw - 2rem)';
-                if (left && !right) {
-                    adjustedStyle.left = '1rem';
+            // Se há um target com posição calculada, usar smart positioning
+            if (targetRect) {
+                const viewport = { w: window.innerWidth, h: window.innerHeight };
+                const padding = 20;
+                const cardWidth = 400;
+                const cardHeight = 280;
+                
+                let pos = { position: 'fixed' };
+                
+                // Calcular melhor posição vertical
+                if (targetRect.bottom + cardHeight + padding < viewport.h) {
+                    // Tem espaço abaixo
+                    pos.top = `${targetRect.bottom + padding}px`;
+                } else if (targetRect.top - cardHeight - padding > 0) {
+                    // Tem espaço acima
+                    pos.top = 'auto';
+                    pos.bottom = `${viewport.h - targetRect.top + padding}px`;
+                } else {
+                    // Centralizar verticalmente
+                    pos.top = '50%';
+                    pos.transform = 'translateY(-50%)';
                 }
-                if (right && !left) {
-                    adjustedStyle.right = '1rem';
+                
+                // Calcular melhor posição horizontal
+                if (targetRect.right + cardWidth + padding < viewport.w) {
+                    // Tem espaço à direita
+                    pos.left = `${targetRect.right + padding}px`;
+                    pos.right = 'auto';
+                } else if (targetRect.left - cardWidth - padding > 0) {
+                    // Tem espaço à esquerda
+                    pos.left = 'auto';
+                    pos.right = `${viewport.w - targetRect.left + padding}px`;
+                } else {
+                    // Centralizar horizontalmente
+                    pos.left = '50%';
+                    pos.transform = pos.transform ? `${pos.transform} translateX(-50%)` : 'translateX(-50%)';
                 }
+                
+                // Ajustar para telas menores
+                if (viewport.w < 1024) {
+                    pos.maxWidth = 'calc(100vw - 2rem)';
+                    pos.left = '1rem';
+                    pos.right = '1rem';
+                } else {
+                    pos.maxWidth = '90vw';
+                }
+                
+                pos.zIndex = 10002;
+                
+                return pos;
             }
             
-            return adjustedStyle;
+            // Fallback para cardStyle estático
+            return step.cardStyle || {};
         };
         
         return (
             <div className="fixed inset-0 z-[10000] pointer-events-none">
-                {/* Overlay escuro com buraco - agora com clip-path para destacar o elemento em foco */}
+                {/* Overlay escuro com buraco (spotlight) - clip-path para destacar o elemento em foco */}
                 <div 
-                    className="absolute inset-0 bg-black/70 backdrop-blur-sm" 
-                    style={{ clipPath: step.target ? createClipPath(step.targetStyle) : 'none' }}
+                    className="absolute inset-0 bg-black/70 backdrop-blur-sm pointer-events-auto" 
+                    style={{ clipPath: targetRect ? createClipPath() : 'none' }}
+                    onClick={handleSkip}
                 />
                 
-                {/* Spotlight no elemento - agora com z-index mais alto para aparecer acima da sidebar */}
-                {step.target && (
+                {/* Borda de destaque no elemento (spotlight border) */}
+                {targetRect && (
                     <div 
-                        className="absolute border-4 border-indigo-500 rounded-xl shadow-[0_0_0_9999px_rgba(0,0,0,0.7)] pointer-events-none z-[10001]"
-                        style={step.targetStyle}
+                        className="absolute border-4 border-indigo-500 rounded-xl pointer-events-none z-[10001] animate-pulse"
+                        style={{
+                            top: `${targetRect.top - 8}px`,
+                            left: `${targetRect.left - 8}px`,
+                            width: `${targetRect.width + 16}px`,
+                            height: `${targetRect.height + 16}px`,
+                        }}
                     />
                 )}
 
-                {/* Card de explicação - com correções para não ficar atrás da sidebar */}
+                {/* Card de explicação - com smart positioning */}
                 <div 
                     className="absolute bg-white dark:bg-[#15161A] rounded-2xl shadow-2xl border-2 border-indigo-500 p-6 max-w-md pointer-events-auto animate-slide-up z-[10002]"
                     style={getTourCardPosition()}
@@ -1138,89 +1184,96 @@ const ContentRenderer = ({ lesson }) => {
         );
     };
 
-    // Modal de Editor em Tela Cheia
+    // Modal de Editor em Tela Cheia - Redesenhado
     const FullscreenEditor = ({ isOpen, onClose, children, title }) => {
         if (!isOpen) return null;
         
         return (
-            <div className="fixed inset-0 z-[9998] bg-black/80 backdrop-blur-sm animate-fade-in">
-                <div className="absolute inset-0 overflow-y-auto">
-                    <div className="min-h-full flex flex-col">
-                        {/* Header fixo */}
-                        <div className="sticky top-0 z-10 bg-white dark:bg-[#15161A] border-b border-slate-200 dark:border-white/10 shadow-lg">
-                            <div className="max-w-[1800px] mx-auto px-6 py-4 flex items-center justify-between">
-                                <div className="flex items-center gap-3">
-                                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
-                                        <Icon name="Edit" size={20} className="text-white" />
-                                    </div>
-                                    <div>
-                                        <h2 className="text-lg font-bold text-slate-900 dark:text-white">{title || 'Editor'}</h2>
-                                        <p className="text-xs text-slate-500 dark:text-zinc-400">Modo tela cheia</p>
-                                    </div>
-                                </div>
-                                <button
-                                    onClick={onClose}
-                                    className="w-10 h-10 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 transition-colors"
-                                >
-                                    <Icon name="X" size={20} className="text-slate-600 dark:text-zinc-400" />
-                                </button>
-                            </div>
+            <div className="fixed inset-0 z-[9998] bg-white dark:bg-[#0B0C10] animate-fade-in flex flex-col">
+                {/* Header Sticky */}
+                <div className="sticky top-0 z-10 bg-white dark:bg-[#15161A] border-b border-slate-200 dark:border-white/10 shadow-sm">
+                    <div className="h-16 px-6 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <h2 className="text-sm font-bold text-slate-900 dark:text-white">{title || 'Editor'}</h2>
                         </div>
-                        
-                        {/* Conteúdo */}
-                        <div className="flex-1 max-w-[1800px] mx-auto w-full px-6 py-8">
-                            {children}
-                        </div>
+                        <button
+                            onClick={onClose}
+                            className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 hover:bg-slate-100 dark:hover:bg-white/10 transition-colors"
+                        >
+                            <Icon name="X" size={18} />
+                        </button>
+                    </div>
+                </div>
+                
+                {/* Content Area */}
+                <div className="flex-1 overflow-auto">
+                    <div className="max-w-7xl mx-auto w-full p-6">
+                        {children}
                     </div>
                 </div>
             </div>
         );
     };
 
-    // Componente de Tooltip Contextual
+    // Componente de Tooltip Contextual com Smart Positioning
     const StudioTooltip = ({ children, text, position = 'top' }) => {
         const [show, setShow] = useState(false);
         const tooltipRef = useRef(null);
         
-        // Função para calcular a posição do tooltip para evitar que fique fora da tela
+        // Função para calcular a posição do tooltip com detecção inteligente de viewport
         const getPositionClasses = () => {
-            if (!show) return '';
+            if (!show || !tooltipRef.current) return '';
             
-            // Determinar a posição ideal baseada na posição do elemento
-            const element = tooltipRef.current?.parentElement;
-            if (!element) return `top-0 ${position}-full ml-2`;
+            const el = tooltipRef.current.parentElement;
+            if (!el) return 'bottom-full mb-2';
             
-            // Ajustar posição para evitar que fique fora da tela
-            const rect = element.getBoundingClientRect();
-            const windowWidth = window.innerWidth;
+            const rect = el.getBoundingClientRect();
+            const vw = window.innerWidth;
+            const vh = window.innerHeight;
+            const padding = 16;
+            const tooltipWidth = 280;
+            const tooltipHeight = 100; // Estimativa
             
-            if (position === 'top') {
-                const leftPos = rect.left < windowWidth * 0.2 ? 'left-0' : rect.right > windowWidth * 0.8 ? 'right-0' : 'left-1/2 -translate-x-1/2';
-                return `bottom-full mb-2 ${leftPos}`;
-            } else if (position === 'bottom') {
-                const leftPos = rect.left < windowWidth * 0.2 ? 'left-0' : rect.right > windowWidth * 0.8 ? 'right-0' : 'left-1/2 -translate-x-1/2';
-                return `top-full mt-2 ${leftPos}`;
-            } else if (position === 'left') {
-                return 'right-full mr-2 top-1/2 -translate-y-1/2';
-            } else { // right
-                return 'left-full ml-2 top-1/2 -translate-y-1/2';
+            let pos = '';
+            
+            // Detectar melhor posição vertical com fallback inteligente
+            if (position === 'top' && rect.top > tooltipHeight + padding) {
+                pos = 'bottom-full mb-2';
+            } else if (position === 'bottom' || rect.top < tooltipHeight + padding) {
+                // Se não cabe acima, vai abaixo
+                if (rect.bottom + tooltipHeight + padding < vh) {
+                    pos = 'top-full mt-2';
+                } else {
+                    // Se não cabe nem acima nem abaixo, vai acima mesmo
+                    pos = 'bottom-full mb-2';
+                }
+            } else {
+                pos = 'bottom-full mb-2';
             }
+            
+            // Detectar melhor posição horizontal
+            if (rect.left < tooltipWidth / 2 + padding) {
+                pos += ' left-0';
+            } else if (rect.right + tooltipWidth / 2 > vw - padding) {
+                pos += ' right-0';
+            } else {
+                pos += ' left-1/2 -translate-x-1/2';
+            }
+            
+            return pos;
         };
         
         return (
-            <div ref={tooltipRef} className="relative inline-block" onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
+            <div 
+                ref={tooltipRef} 
+                className="relative inline-block" 
+                onMouseEnter={() => setShow(true)} 
+                onMouseLeave={() => setShow(false)}
+            >
                 {children}
                 {show && (
                     <div className={`absolute z-[9999] px-3 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-zinc-800 rounded-lg shadow-xl max-w-xs break-words pointer-events-none animate-fade-in ${getPositionClasses()}`}>
-                        <div className="max-w-xs break-words">
-                            {text}
-                        </div>
-                        <div className={`absolute w-2 h-2 bg-slate-900 dark:bg-zinc-800 rotate-45
-                            ${position === 'top' ? 'bottom-[-4px] left-1/2 -translate-x-1/2' : ''}
-                            ${position === 'bottom' ? 'top-[-4px] left-1/2 -translate-x-1/2' : ''}
-                            ${position === 'left' ? 'right-[-4px] top-1/2 -translate-y-1/2' : ''}
-                            ${position === 'right' ? 'left-[-4px] top-1/2 -translate-y-1/2' : ''}
-                        `}></div>
+                        {text}
                     </div>
                 )}
             </div>
@@ -1270,7 +1323,10 @@ const ContentRenderer = ({ lesson }) => {
                     </div>
                     <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
-                            <h3 className="text-sm font-bold text-slate-900 dark:text-white break-words max-w-[160px] group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors cursor-pointer">
+                            <h3 
+                                className="text-sm font-bold text-slate-900 dark:text-white break-words max-w-[160px] group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors cursor-pointer truncate" 
+                                title={course.title || 'Sem título'}
+                            >
                                 {course.title || 'Sem título'}
                             </h3>
                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
@@ -1354,7 +1410,7 @@ const ContentRenderer = ({ lesson }) => {
                             </div>
                             <div className="flex-1 min-w-0">
                                 <div className="flex items-center gap-2">
-                                    <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors break-words max-w-[160px]">
+                                    <h4 className="text-sm font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors break-words max-w-[160px] line-clamp-2">
                                         {module.name}
                                     </h4>
                                     {isGeral && (
