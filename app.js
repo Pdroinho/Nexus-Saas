@@ -1037,8 +1037,12 @@ const ContentRenderer = ({ lesson }) => {
             if (!step.cardStyle) return {};
             
             const { top, left, right, bottom, transform } = step.cardStyle;
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
+            const cardWidth = 400; // max-width padrão
+            const cardMargin = 16; // margem mínima das bordas
             
-            // Ajustar posição para evitar que fique atrás da sidebar
+            // Estilo base
             const adjustedStyle = {
                 top,
                 left,
@@ -1049,15 +1053,39 @@ const ContentRenderer = ({ lesson }) => {
                 zIndex: 10002
             };
             
-            // Ajustar para telas menores
-            if (window.innerWidth < 1024) { // mobile
+            // Ajustes para evitar que o card fique fora da viewport
+            // Se tiver left percentual, garantir que não saia da tela
+            if (left && typeof left === 'string' && left.includes('%')) {
+                const leftPercent = parseFloat(left);
+                const calculatedLeft = (viewportWidth * leftPercent) / 100;
+                
+                // Se o card for sair pela direita, ajustar
+                if (calculatedLeft + cardWidth > viewportWidth - cardMargin) {
+                    adjustedStyle.left = 'auto';
+                    adjustedStyle.right = `${cardMargin}px`;
+                    adjustedStyle.transform = 'none';
+                }
+                // Se o card for sair pela esquerda, ajustar
+                else if (calculatedLeft < cardMargin) {
+                    adjustedStyle.left = `${cardMargin}px`;
+                    adjustedStyle.transform = 'none';
+                }
+            }
+            
+            // Se tiver right, garantir margem mínima
+            if (right && typeof right === 'string') {
+                const rightValue = parseFloat(right);
+                if (rightValue < cardMargin) {
+                    adjustedStyle.right = `${cardMargin}px`;
+                }
+            }
+            
+            // Ajustes para telas menores
+            if (viewportWidth < 1024) { // mobile/tablet
                 adjustedStyle.maxWidth = 'calc(100vw - 2rem)';
-                if (left && !right) {
-                    adjustedStyle.left = '1rem';
-                }
-                if (right && !left) {
-                    adjustedStyle.right = '1rem';
-                }
+                adjustedStyle.left = '1rem';
+                adjustedStyle.right = '1rem';
+                adjustedStyle.transform = 'none';
             }
             
             return adjustedStyle;
@@ -1065,23 +1093,61 @@ const ContentRenderer = ({ lesson }) => {
         
         return (
             <div className="fixed inset-0 z-[10000] pointer-events-none">
-                {/* Overlay escuro com buraco - agora com clip-path para destacar o elemento em foco */}
-                <div 
-                    className="absolute inset-0 bg-black/70 backdrop-blur-sm" 
-                    style={{ clipPath: step.target ? createClipPath(step.targetStyle) : 'none' }}
-                />
-                
-                {/* Spotlight no elemento - agora com z-index mais alto para aparecer acima da sidebar */}
-                {step.target && (
-                    <div 
-                        className="absolute border-4 border-indigo-500 rounded-xl shadow-[0_0_0_9999px_rgba(0,0,0,0.7)] pointer-events-none z-[10001]"
-                        style={step.targetStyle}
-                    />
+                {/* Overlay escuro - sem cobrir o elemento em destaque */}
+                {step.target ? (
+                    <>
+                        {/* Overlay superior */}
+                        <div 
+                            className="absolute left-0 right-0 bg-black/70 backdrop-blur-sm pointer-events-none"
+                            style={{ 
+                                top: 0, 
+                                height: step.targetStyle?.top || 0 
+                            }}
+                        />
+                        {/* Overlay esquerdo */}
+                        <div 
+                            className="absolute bg-black/70 backdrop-blur-sm pointer-events-none"
+                            style={{ 
+                                top: step.targetStyle?.top || 0,
+                                left: 0,
+                                width: step.targetStyle?.left || 0,
+                                height: step.targetStyle?.height || 0
+                            }}
+                        />
+                        {/* Overlay direito */}
+                        <div 
+                            className="absolute bg-black/70 backdrop-blur-sm pointer-events-none"
+                            style={{ 
+                                top: step.targetStyle?.top || 0,
+                                right: 0,
+                                left: `calc(${step.targetStyle?.left || 0} + ${step.targetStyle?.width || 0})`,
+                                height: step.targetStyle?.height || 0
+                            }}
+                        />
+                        {/* Overlay inferior */}
+                        <div 
+                            className="absolute left-0 right-0 bg-black/70 backdrop-blur-sm pointer-events-none"
+                            style={{ 
+                                top: `calc(${step.targetStyle?.top || 0} + ${step.targetStyle?.height || 0})`,
+                                bottom: 0
+                            }}
+                        />
+                        {/* Borda de destaque no elemento */}
+                        <div 
+                            className="absolute border-4 border-indigo-500 rounded-xl pointer-events-none animate-pulse"
+                            style={{
+                                ...step.targetStyle,
+                                boxShadow: '0 0 0 4px rgba(99, 102, 241, 0.2), 0 0 20px rgba(99, 102, 241, 0.4)'
+                            }}
+                        />
+                    </>
+                ) : (
+                    <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
                 )}
 
-                {/* Card de explicação - com correções para não ficar atrás da sidebar */}
+                {/* Card de explicação - com melhor posicionamento e z-index */}
                 <div 
-                    className="absolute bg-white dark:bg-[#15161A] rounded-2xl shadow-2xl border-2 border-indigo-500 p-6 max-w-md pointer-events-auto animate-slide-up z-[10002]"
+                    className="absolute bg-white dark:bg-[#15161A] rounded-2xl shadow-2xl border-2 border-indigo-500 p-6 max-w-md pointer-events-auto animate-slide-up"
                     style={getTourCardPosition()}
                 >
                     <div className="flex items-start justify-between mb-4">
@@ -1102,17 +1168,19 @@ const ContentRenderer = ({ lesson }) => {
                         </button>
                     </div>
                     
-                    <p className="text-sm text-slate-700 dark:text-zinc-300 mb-4 leading-relaxed">{step.description}</p>
+                    <p className="text-sm text-slate-700 dark:text-zinc-300 mb-6 leading-relaxed">{step.description}</p>
 
-                    <div className="flex items-center justify-between gap-3">
-                        <label className="flex items-center gap-2 cursor-pointer">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                        <label className="flex items-center gap-2 cursor-pointer group">
                             <input
                                 type="checkbox"
                                 checked={dontShowAgain}
                                 onChange={(e) => setDontShowAgain(e.target.checked)}
-                                className="w-4 h-4 rounded border-slate-300 dark:border-white/20 text-indigo-600 focus:ring-indigo-500"
+                                className="w-4 h-4 rounded border-slate-300 dark:border-white/20 text-indigo-600 focus:ring-indigo-500 focus:ring-2 cursor-pointer"
                             />
-                            <span className="text-xs text-slate-600 dark:text-zinc-400 font-medium">Não mostrar novamente</span>
+                            <span className="text-xs text-slate-600 dark:text-zinc-400 font-medium group-hover:text-slate-900 dark:group-hover:text-zinc-200 transition-colors">
+                                Não mostrar novamente
+                            </span>
                         </label>
                         
                         <div className="flex items-center gap-2">
@@ -1140,10 +1208,24 @@ const ContentRenderer = ({ lesson }) => {
 
     // Modal de Editor em Tela Cheia
     const FullscreenEditor = ({ isOpen, onClose, children, title }) => {
+        // Adicionar handler para tecla ESC
+        useEffect(() => {
+            if (!isOpen) return;
+            
+            const handleEscape = (e) => {
+                if (e.key === 'Escape') {
+                    onClose();
+                }
+            };
+            
+            document.addEventListener('keydown', handleEscape);
+            return () => document.removeEventListener('keydown', handleEscape);
+        }, [isOpen, onClose]);
+        
         if (!isOpen) return null;
         
         return (
-            <div className="fixed inset-0 z-[9998] bg-black/80 backdrop-blur-sm animate-fade-in">
+            <div className="fixed inset-0 z-[9999] bg-black/90 backdrop-blur-sm animate-fade-in">
                 <div className="absolute inset-0 overflow-y-auto">
                     <div className="min-h-full flex flex-col">
                         {/* Header fixo */}
@@ -1151,18 +1233,19 @@ const ContentRenderer = ({ lesson }) => {
                             <div className="max-w-[1800px] mx-auto px-6 py-4 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center">
-                                        <Icon name="Edit" size={20} className="text-white" />
+                                        <Icon name="Maximize2" size={20} className="text-white" />
                                     </div>
                                     <div>
                                         <h2 className="text-lg font-bold text-slate-900 dark:text-white">{title || 'Editor'}</h2>
-                                        <p className="text-xs text-slate-500 dark:text-zinc-400">Modo tela cheia</p>
+                                        <p className="text-xs text-slate-500 dark:text-zinc-400">Modo tela cheia • Pressione ESC para sair</p>
                                     </div>
                                 </div>
                                 <button
                                     onClick={onClose}
-                                    className="w-10 h-10 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 transition-colors"
+                                    className="w-10 h-10 rounded-lg flex items-center justify-center bg-slate-100 dark:bg-white/10 hover:bg-slate-200 dark:hover:bg-white/20 transition-colors group"
+                                    title="Fechar (ESC)"
                                 >
-                                    <Icon name="X" size={20} className="text-slate-600 dark:text-zinc-400" />
+                                    <Icon name="X" size={20} className="text-slate-600 dark:text-zinc-400 group-hover:scale-110 transition-transform" />
                                 </button>
                             </div>
                         </div>
@@ -1211,8 +1294,8 @@ const ContentRenderer = ({ lesson }) => {
             <div ref={tooltipRef} className="relative inline-block" onMouseEnter={() => setShow(true)} onMouseLeave={() => setShow(false)}>
                 {children}
                 {show && (
-                    <div className={`absolute z-[9999] px-3 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-zinc-800 rounded-lg shadow-xl max-w-xs break-words pointer-events-none animate-fade-in ${getPositionClasses()}`}>
-                        <div className="max-w-xs break-words">
+                    <div className={`absolute z-[9999] px-3 py-2 text-xs font-medium text-white bg-slate-900 dark:bg-zinc-800 rounded-lg shadow-xl whitespace-normal pointer-events-none animate-fade-in ${getPositionClasses()}`}>
+                        <div className="max-w-[250px] break-words">
                             {text}
                         </div>
                         <div className={`absolute w-2 h-2 bg-slate-900 dark:bg-zinc-800 rotate-45
@@ -2154,6 +2237,18 @@ const ModalConfirm = ({ open, title, message, onCancel, onConfirm, confirmText =
                                 </h2>
                                 <p className="text-[10px] text-slate-600 dark:text-zinc-400 mt-1">Gerencie seus cursos</p>
                             </div>
+                            <StudioTooltip text="Mostrar tour de apresentação novamente" position="left">
+                                <button
+                                    onClick={() => {
+                                        localStorage.removeItem('studio-tour-completed');
+                                        setTourStep(0);
+                                    }}
+                                    className="w-9 h-9 rounded-lg flex items-center justify-center bg-white dark:bg-white/5 border border-indigo-200 dark:border-indigo-500/20 hover:bg-indigo-50 dark:hover:bg-indigo-500/10 transition-colors group"
+                                    type="button"
+                                >
+                                    <Icon name="HelpCircle" size={16} className="text-indigo-600 dark:text-indigo-400 group-hover:scale-110 transition-transform" />
+                                </button>
+                            </StudioTooltip>
                         </div>
                         <StudioTooltip text="Criar um novo curso do zero">
                             <button
@@ -2476,7 +2571,7 @@ const ModalConfirm = ({ open, title, message, onCancel, onConfirm, confirmText =
                                         </div>
                                     </div>
                                     <div className="flex items-center gap-2 shrink-0">
-                                        <StudioTooltip text="Abrir editor em tela cheia">
+                                        <StudioTooltip text="Abrir editor em tela cheia (maximize o espaço de trabalho)" position="top">
                                             <button
                                                 onClick={() => setIsFullscreen(true)}
                                                 className="w-10 h-10 rounded-xl flex items-center justify-center bg-white dark:bg-white/5 border border-slate-200 dark:border-white/10 hover:bg-slate-50 dark:hover:bg-white/10 transition-all active:scale-95"
